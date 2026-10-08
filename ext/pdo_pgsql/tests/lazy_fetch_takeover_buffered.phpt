@@ -1,5 +1,5 @@
 --TEST--
-PDO PgSQL a lazy fetch stale after a buffered query does not read the next statement's rows
+PDO PgSQL a buffered query cannot take over an active lazy result
 --EXTENSIONS--
 pdo_pgsql
 --SKIPIF--
@@ -19,8 +19,12 @@ $first = $pdo->prepare("VALUES (1), (2), (3)", [PDO::ATTR_PREFETCH => 0]);
 $first->execute();
 $first->fetch();
 
-// a buffered query drains the stream but does not end $first's lazy fetch
-$pdo->prepare("VALUES (99)")->execute();
+try {
+    $pdo->prepare("VALUES (99)")->execute();
+} catch (PDOException $e) {
+    echo $e->getCode(), "\n";
+}
+var_dump($first->fetchAll(PDO::FETCH_COLUMN));
 
 $third = $pdo->prepare("VALUES (777), (888)", [PDO::ATTR_PREFETCH => 0]);
 $third->execute();
@@ -29,6 +33,13 @@ var_dump($first->fetch(PDO::FETCH_NUM));
 var_dump($third->fetchAll(PDO::FETCH_COLUMN));
 ?>
 --EXPECT--
+HY000
+array(2) {
+  [0]=>
+  string(1) "2"
+  [1]=>
+  string(1) "3"
+}
 bool(false)
 array(2) {
   [0]=>

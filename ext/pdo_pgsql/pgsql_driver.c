@@ -107,6 +107,24 @@ int _pdo_pgsql_error(pdo_dbh_t *dbh, pdo_stmt_t *stmt, int errcode, const char *
 }
 /* }}} */
 
+/* Do not let libpq discard an unread lazy result when starting another command. */
+bool pdo_pgsql_check_pending_result(pdo_dbh_t *dbh, pdo_stmt_t *stmt)
+{
+	pdo_pgsql_db_handle *H = (pdo_pgsql_db_handle *)dbh->driver_data;
+
+	if (H->running_stmt && H->running_stmt->is_running_unbuffered
+			&& H->running_stmt->result && PQntuples(H->running_stmt->result) > 0
+			&& (!stmt || H->running_stmt != stmt->driver_data)) {
+		_pdo_pgsql_error(dbh, stmt, 0, "HY000",
+			"Cannot execute another command while an unbuffered result is active; "
+			"fetch all rows or call PDOStatement::closeCursor() first",
+			__FILE__, __LINE__);
+		return false;
+	}
+
+	return true;
+}
+
 static void _pdo_pgsql_notice(void *context, const char *message) /* {{{ */
 {
 	pdo_dbh_t * dbh = (pdo_dbh_t *)context;
@@ -394,6 +412,10 @@ static zend_long pgsql_handle_doer(pdo_dbh_t *dbh, const zend_string *sql)
 	zend_long ret = 1;
 	ExecStatusType qs;
 
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		return -1;
+	}
+
 	bool in_trans = pgsql_handle_in_transaction(dbh);
 
 	if (!(res = PQexec(H->server, ZSTR_VAL(sql)))) {
@@ -469,6 +491,10 @@ static zend_string *pdo_pgsql_last_insert_id(pdo_dbh_t *dbh, const zend_string *
 	zend_string *id = NULL;
 	PGresult *res;
 	ExecStatusType status;
+
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		return NULL;
+	}
 
 	if (name == NULL) {
 		res = PQexec(H->server, "SELECT LASTVAL()");
@@ -635,6 +661,10 @@ static bool pdo_pgsql_transaction_cmd(const char *cmd, pdo_dbh_t *dbh)
 	PGresult *res;
 	bool ret = true;
 
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		return false;
+	}
+
 	res = PQexec(H->server, cmd);
 
 	if (PQresultStatus(res) != PGRES_COMMAND_OK) {
@@ -731,6 +761,11 @@ void pgsqlCopyFromArray_internal(INTERNAL_FUNCTION_PARAMETERS)
 	dbh = Z_PDO_DBH_P(ZEND_THIS);
 	PDO_CONSTRUCT_CHECK;
 	PDO_DBH_CLEAR_ERR();
+
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		PDO_HANDLE_DBH_ERR();
+		RETURN_FALSE;
+	}
 
 	/* using pre-9.0 syntax as PDO_pgsql is 7.4+ compatible */
 	if (pg_fields) {
@@ -856,6 +891,11 @@ void pgsqlCopyFromFile_internal(INTERNAL_FUNCTION_PARAMETERS)
 	PDO_CONSTRUCT_CHECK;
 	PDO_DBH_CLEAR_ERR();
 
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		PDO_HANDLE_DBH_ERR();
+		RETURN_FALSE;
+	}
+
 	stream = php_stream_open_wrapper_ex(filename, "rb", 0, NULL, FG(default_context));
 	if (!stream) {
 		pdo_pgsql_error_msg(dbh, PGRES_FATAL_ERROR, "Unable to open the file");
@@ -959,6 +999,11 @@ void pgsqlCopyToFile_internal(INTERNAL_FUNCTION_PARAMETERS)
 	PDO_CONSTRUCT_CHECK;
 	PDO_DBH_CLEAR_ERR();
 
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		PDO_HANDLE_DBH_ERR();
+		RETURN_FALSE;
+	}
+
 	H = (pdo_pgsql_db_handle *)dbh->driver_data;
 
 	stream = php_stream_open_wrapper_ex(filename, "wb", 0, NULL, FG(default_context));
@@ -1056,6 +1101,11 @@ void pgsqlCopyToArray_internal(INTERNAL_FUNCTION_PARAMETERS)
 	dbh = Z_PDO_DBH_P(ZEND_THIS);
 	PDO_CONSTRUCT_CHECK;
 	PDO_DBH_CLEAR_ERR();
+
+	if (!pdo_pgsql_check_pending_result(dbh, NULL)) {
+		PDO_HANDLE_DBH_ERR();
+		RETURN_FALSE;
+	}
 
 	H = (pdo_pgsql_db_handle *)dbh->driver_data;
 

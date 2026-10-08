@@ -67,6 +67,10 @@ PHP                                                                        NEWS
   . Fixed bug GH-23962 (Destroying a persistent PDO instance rolls back a
     transaction still in use by another instance). (Lazizbek Ergashev)
 
+- PDO PgSQL:
+  . Reject competing SQL commands while a lazy result is active, preserving
+    unread rows until fetched or explicitly closed. (Nikolay Savchenko)
+
 - PGSQL:
   . Fixed pg_lo_write() rejecting data containing null bytes. (Ilia Alshanetsky)
 

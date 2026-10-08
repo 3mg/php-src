@@ -265,6 +265,10 @@ static int pgsql_stmt_execute(pdo_stmt_t *stmt)
 	ExecStatusType status;
 	int dispatch_result = 1;
 
+	if (!pdo_pgsql_check_pending_result(stmt->dbh, stmt)) {
+		return 0;
+	}
+
 	bool in_trans = stmt->dbh->methods->in_transaction(stmt->dbh);
 
 	/* in unbuffered mode, finish any running statement: libpq explicitely prohibits this
@@ -940,6 +944,14 @@ static int pgsql_stmt_get_column_meta(pdo_stmt_t *stmt, zend_long colno, zval *r
 
 static int pdo_pgsql_stmt_cursor_closer(pdo_stmt_t *stmt)
 {
+	pdo_pgsql_stmt *S = (pdo_pgsql_stmt *)stmt->driver_data;
+
+	if (S->is_running_unbuffered) {
+		pgsql_stmt_finish(S, FIN_DISCARD);
+		S->current_row = 0;
+		stmt->row_count = 0;
+	}
+
 	return 1;
 }
 

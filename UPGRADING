@@ -27,6 +27,13 @@ PHP 8.7 UPGRADE NOTES
     not present in the result set. It previously reported the condition
     through PDO::ATTR_ERRMODE and returned false.
 
+- PDO_PGSQL:
+  . Starting another statement, executing SQL with PDO::exec(), transaction
+    commands, lastInsertId() or COPY helpers while a lazy result is active now
+    reports an error according to PDO::ATTR_ERRMODE instead of discarding its
+    unread rows. Consume the result or explicitly call closeCursor() first.
+    Re-executing the same statement still replaces its own result.
+
 - Standard:
   . The number of filters that can be chained in a php://filter URL is limited
     to 16 by default. Set the stream context option max_filter_count to change

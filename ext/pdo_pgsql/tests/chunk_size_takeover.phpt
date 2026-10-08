@@ -1,5 +1,5 @@
 --TEST--
-PDO PgSQL a chunked statement whose stream was taken over reports no leftover rows
+PDO PgSQL a competing query cannot discard unread rows from a chunked result
 --EXTENSIONS--
 pdo_pgsql
 --SKIPIF--
@@ -21,7 +21,11 @@ $first = $pdo->prepare("SELECT * FROM generate_series(1, 10)");
 $first->execute();
 echo "first row: ", $first->fetch(PDO::FETCH_NUM)[0], "\n";
 
-$pdo->query("SELECT * FROM generate_series(1, 10)")->fetch();
+try {
+    $pdo->query("SELECT * FROM generate_series(1, 10)")->fetch();
+} catch (PDOException $e) {
+    echo $e->getCode(), "\n";
+}
 
 $rest = [];
 while (($row = $first->fetch(PDO::FETCH_NUM))) {
@@ -32,5 +36,6 @@ echo "error code: ", $first->errorCode(), "\n";
 ?>
 --EXPECT--
 first row: 1
-rows afterwards: ''
+HY000
+rows afterwards: '2,3,4,5,6,7,8,9,10'
 error code: 00000

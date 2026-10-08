@@ -131,6 +131,7 @@ $stmt->execute([ 15 ]);
 $res = []; while (($re = $stmt->fetch())) $res[] = $re; display($res);
 $stmt->execute([ 0 ]);
 $res = []; for ($i = -1; ++$i < 2;) $res[] = $stmt->fetch(); display($res);
+$stmt->closeCursor();
 display($pdo->query("select * from t2")->fetchAll());
 ?>
 --EXPECTF--
